@@ -1,163 +1,148 @@
 import numpy as np
 import random
 
-# Define actions: 0 = Pass/Fold/Check, 1 = Bet/Call
-PASS = 0
-BET = 1
-NUM_ACTIONS = 2
+# Game constants
+P_FOLD = 0
+P_BET = 1
+ACT_SIZE = 2
 
-class KuhnNode:
-    def __init__(self, info_set):
-        self.info_set = info_set
-        self.regret_sum = np.zeros(NUM_ACTIONS)
-        self.strategy = np.zeros(NUM_ACTIONS)
-        self.strategy_sum = np.zeros(NUM_ACTIONS)
+class PokerNode:
+    def __init__(self, key):
+        self.key = key
+        self.regrets = np.zeros(ACT_SIZE)
+        self.strat = np.zeros(ACT_SIZE)
+        self.strat_sum = np.zeros(ACT_SIZE)
 
-    def get_strategy(self, realization_weight):
-        pos_regret = np.maximum(self.regret_sum, 0)
-        sum_pos_regret = np.sum(pos_regret)
-        if sum_pos_regret > 0:
-            self.strategy = pos_regret / sum_pos_regret
+    def compute_strat(self, weight):
+        pos_r = np.maximum(self.regrets, 0)
+        total = np.sum(pos_r)
+        
+        if total > 0:
+            self.strat = pos_r / total
         else:
-            self.strategy = np.repeat(1.0 / NUM_ACTIONS, NUM_ACTIONS)
-        self.strategy_sum += realization_weight * self.strategy
-        return self.strategy
+            self.strat = np.repeat(1.0 / ACT_SIZE, ACT_SIZE)
+            
+        self.strat_sum += weight * self.strat
+        return self.strat
 
-    def get_average_strategy(self):
-        sum_strategy_sum = np.sum(self.strategy_sum)
-        if sum_strategy_sum > 0:
-            return self.strategy_sum / sum_strategy_sum
-        else:
-            return np.repeat(1.0 / NUM_ACTIONS, NUM_ACTIONS)
+    def get_final_strat(self):
+        total = np.sum(self.strat_sum)
+        if total > 0:
+            return self.strat_sum / total
+        return np.repeat(1.0 / ACT_SIZE, ACT_SIZE)
 
-class KuhnCFRTrainer:
+class SolverCFR:
     def __init__(self):
-        self.node_map = {}
+        self.nodes = {}
 
-    def cfr(self, cards, history, p0, p1):
-        plays = len(history)
-        player = plays % 2
-        opponent = 1 - player
+    def run_cfr(self, cards, history, p0, p1):
+        depth = len(history)
+        curr_act = depth % 2
+        opp_act = 1 - curr_act
 
-        if plays > 1:
-            terminal_pass = history[-1] == 'p'
-            double_bet = history[-2:] == 'bb'
-            is_player_card_higher = cards[player] > cards[opponent]
-            if terminal_pass:
-                if history == 'pp':
-                    return 1 if is_player_card_higher else -1
-                else:
-                    return 1
-            elif double_bet:
-                return 2 if is_player_card_higher else -2
+        # Showdown terminal states
+        if depth > 1:
+            folded = history[-1] == 'p'
+            called = history[-2:] == 'bb'
+            win = cards[curr_act] > cards[opp_act]
+            
+            if folded:
+                return 1 if history == 'pp' and win else (1 if history != 'pp' else -1)
+            if called:
+                return 2 if win else -2
 
-        info_set = str(cards[player]) + "_" + history
-        if info_set not in self.node_map:
-            self.node_map[info_set] = KuhnNode(info_set)
-        node = self.node_map[info_set]
+        state_key = f"{cards[curr_act]}_{history}"
+        if state_key not in self.nodes:
+            self.nodes[state_key] = PokerNode(state_key)
+        n = self.nodes[state_key]
 
-        strategy = node.get_strategy(p0 if player == 0 else p1)
-        util = np.zeros(NUM_ACTIONS)
-        node_util = 0
+        w = p0 if curr_act == 0 else p1
+        curr_strat = n.compute_strat(w)
+        utils = np.zeros(ACT_SIZE)
+        expected_val = 0
 
-        for a in range(NUM_ACTIONS):
-            next_history = history + ('p' if a == PASS else 'b')
-            if player == 0:
-                util[a] = -self.cfr(cards, next_history, p0 * strategy[a], p1)
+        for a in range(ACT_SIZE):
+            next_h = history + ('p' if a == P_FOLD else 'b')
+            if curr_act == 0:
+                utils[a] = -self.run_cfr(cards, next_h, p0 * curr_strat[a], p1)
             else:
-                util[a] = -self.cfr(cards, next_history, p0, p1 * strategy[a])
-            node_util += strategy[a] * util[a]
+                utils[a] = -self.run_cfr(cards, next_h, p0, p1 * curr_strat[a])
+            expected_val += curr_strat[a] * utils[a]
 
-        for a in range(NUM_ACTIONS):
-            regret = util[a] - node_util
-            node.regret_sum[a] += (p1 if player == 0 else p0) * regret
+        for a in range(ACT_SIZE):
+            r = utils[a] - expected_val
+            n.regrets[a] += (p1 if curr_act == 0 else p0) * r
 
-        return node_util
+        return expected_val
 
-    def train(self, iterations):
-        cards = [1, 2, 3]
-        for _ in range(iterations):
-            random.shuffle(cards)
-            self.cfr(cards, "", 1.0, 1.0)
+    def start_training(self, loops):
+        deck = [1, 2, 3] # J, Q, K
+        for _ in range(loops):
+            random.shuffle(deck)
+            self.run_cfr(deck, "", 1.0, 1.0)
 
-# --- Interactive Game Loop ---
-def play_game(trainer):
-    card_names = {1: "Jack", 2: "Queen", 3: "King"}
-    print("\n" + "="*40)
-    print("  WELCOME TO KUHN POKER: YOU VS BOT  ")
-    print("="*40)
-    print("Rules: Deck has Jack, Queen, King. 1 chip ante.")
+def start_match(ai):
+    names = {1: "Jack", 2: "Queen", 3: "King"}
+    print("\n--- KUHN POKER (TEST ENGINE v1.0) ---")
     
     while True:
-        cards = [1, 2, 3]
-        random.shuffle(cards)
-        human_card, bot_card = cards[0], cards[1]
+        deck = [1, 2, 3]
+        random.shuffle(deck)
+        p_card, bot_card = deck[0], deck[1]
+        p1_acts = random.choice([True, False])
+        h = ""
         
-        # Randomly choose who goes first
-        human_turn = random.choice([True, False])
-        history = ""
+        print(f"\n[Hand] Dealt: {names[p_card]}")
         
-        print(f"\nYou are dealt: {card_names[human_card]}")
-        
-        if human_turn:
-            print("You are Player 1 (First to act).")
-            # Human Action 1
-            move = input("Choose action - (p)ass/check or (b)et: ").strip().lower()
-            history += 'p' if move.startswith('p') else 'b'
+        if p1_acts:
+            print(">> Action is on you first.")
+            act = input("Action? (p = check, b = bet): ").strip().lower()
+            h += 'p' if act == 'p' else 'b'
             
-            # Bot Action 1
-            info_set = f"{bot_card}_{history}"
-            bot_strat = trainer.node_map[info_set].get_average_strategy()
-            bot_move = 'p' if random.random() < bot_strat[0] else 'b'
-            print(f"Bot sees history '{history}' and chooses to: {'Pass/Fold' if bot_move == 'p' else 'Bet/Call'}")
-            history += bot_move
+            key = f"{bot_card}_{h}"
+            bot_s = ai.nodes[key].get_final_strat()
+            bot_a = 'p' if random.random() < bot_s[0] else 'b'
+            print(f"Bot action: {bot_a}")
+            h += bot_a
             
-            # Human Action 2 (if applicable)
-            if history == 'pb':
-                move = input("Bot bet! Choose action - (p)ass/fold or (b)et/call: ").strip().lower()
-                history += 'p' if move.startswith('p') else 'b'
+            if h == 'pb':
+                act = input("Bot raised. (p = fold, b = call): ").strip().lower()
+                h += 'p' if act == 'p' else 'b'
         else:
-            print("Bot is Player 1 (First to act).")
-            # Bot Action 1
-            info_set = f"{bot_card}_"
-            bot_strat = trainer.node_map[info_set].get_average_strategy()
-            bot_move = 'p' if random.random() < bot_strat[0] else 'b'
-            print(f"Bot chooses to: {'Pass/Check' if bot_move == 'p' else 'Bet'}")
-            history += bot_move
+            key = f"{bot_card}_"
+            bot_s = ai.nodes[key].get_final_strat()
+            bot_a = 'p' if random.random() < bot_s[0] else 'b'
+            print(f"Bot acts first: {bot_a}")
+            h += bot_a
             
-            # Human Action 1
-            move = input(f"Bot did '{bot_move}'. Choose action - (p)ass or (b)et: ").strip().lower()
-            history += 'p' if move.startswith('p') else 'b'
+            act = input("Your turn (p = check/fold, b = bet/call): ").strip().lower()
+            h += 'p' if act == 'p' else 'b'
             
-            # Bot Action 2 (if applicable)
-            if history == 'pb':
-                info_set = f"{bot_card}_{history}"
-                bot_strat = trainer.node_map[info_set].get_average_strategy()
-                bot_move = 'p' if random.random() < bot_strat[0] else 'b'
-                print(f"Bot faces your bet and chooses to: {'Pass/Fold' if bot_move == 'p' else 'Bet/Call'}")
-                history += bot_move
+            if h == 'pb':
+                key = f"{bot_card}_{h}"
+                bot_s = ai.nodes[key].get_final_strat()
+                bot_a = 'p' if random.random() < bot_s[0] else 'b'
+                print(f"Bot response to bet: {bot_a}")
+                h += bot_a
 
-        # Evaluate showdown
-        print(f"\nShowdown! Bot held: {card_names[bot_card]}")
-        is_human_higher = human_card > bot_card
+        print(f"Showdown -> Bot held: {names[bot_card]}")
+        good = p_card > bot_card
         
-        if history in ['pp', 'bb']:
-            multiplier = 1 if history == 'pp' else 2
-            if is_human_higher:
-                print(f"Your card is higher! You win {multiplier} chip(s).")
+        if h in ['pp', 'bb']:
+            m = 1 if h == 'pp' else 2
+            print("You Win!" if good else "Bot Wins!")
+        elif h in ['bp', 'pbp']:
+            # Checked fold scenarios
+            if (p1_acts and h == 'bp') or (not p1_acts and h == 'pbp'):
+                print("Bot folded. You win.")
             else:
-                print(f"Bot's card is higher! Bot wins {multiplier} chip(s).")
-        elif history == 'bp' or history == 'pbp':
-            if (human_turn and history == 'bp') or (not human_turn and history == 'pbp'):
-                print("Bot folded! You win 1 chip.")
-            else:
-                print("You folded! Bot wins 1 chip.")
+                print("You folded. Bot wins.")
                 
-        if input("\nPlay another hand? (y/n): ").strip().lower() != 'y':
+        if input("\nNext hand? (y/n): ").strip().lower() != 'y':
             break
 
 if __name__ == "__main__":
-    print("Training bot over 100,000 iterations to achieve GTO stability...")
-    trainer = KuhnCFRTrainer()
-    trainer.train(100000)
-    play_game(trainer)
+    print("Running background CFR training arrays...")
+    brain = SolverCFR()
+    brain.start_training(100000)
+    start_match(brain)
