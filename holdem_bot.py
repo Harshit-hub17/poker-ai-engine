@@ -7,20 +7,28 @@ class VisualHoldemGame:
     def __init__(self):
         self.ranks = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
         self.suits = ['s', 'h', 'd', 'c']
-        # Map symbols for visual layout rendering
         self.suit_symbols = {'s': '♠', 'h': '♥', 'd': '♦', 'c': '♣'}
         
+        # ANSI Escape Codes for Terminal Colors
+        self.RED = "\033[1;31m"    # Bold Red text
+        self.WHITE = "\033[1;37m"  # Bold White text
+        self.RESET = "\033[0m"     # Resets terminal back to default text color
+
     def render_cards(self, card_strings):
-        """Converts raw lists like ['As', 'Kh'] into clean horizontal ASCII blocks."""
+        """Converts raw lists into beautifully aligned colored ASCII blocks."""
         lines = ["", "", "", ""]
         for card in card_strings:
             rank = card[0]
-            suit = self.suit_symbols.get(card[1], card[1])
+            suit_letter = card[1]
+            suit_symbol = self.suit_symbols.get(suit_letter, suit_letter)
             
-            lines[0] +=" ┌───┐ "
-            lines[1] +=f" │{rank}  │ "
-            lines[2] +=f" │  {suit}│ "
-            lines[3] +=" └───┘ "
+            # Select appropriate color code based on the suit type
+            color = self.RED if suit_letter in ['h', 'd'] else self.WHITE
+            
+            lines[0] += f"{color} ┌───┐ {self.RESET}"
+            lines[1] += f"{color} │{rank}  │ {self.RESET}"
+            lines[2] += f"{color} │  {suit_symbol}│ {self.RESET}"
+            lines[3] += f"{color} └───┘ {self.RESET}"
             
         return "\n".join(lines)
 
@@ -38,7 +46,7 @@ class VisualHoldemGame:
         current_board = flop.copy()
         
         print("\n" + "🃏 " * 15)
-        print(f"       CURRENT CHIP BALACE: {current_chips} Chips")
+        print(f"       CURRENT CHIP BALANCE: {current_chips} Chips")
         print("🃏 " * 15)
         print("YOUR PRIVATE POCKET HAND:")
         print(self.render_cards(human_hand_str))
@@ -46,23 +54,21 @@ class VisualHoldemGame:
         print(self.render_cards(current_board))
         print("-" * 45)
         
-        # --- Interactive Betting Round ---
         print("👉 Action is on you! (Ante cost: 10 chips. Betting adds 20 more)")
         action = input("Choose action - (b)et/call or (f)old: ").strip().lower()
         
-        pot = 20  # 10 chips ante from each player
+        pot = 20
         
         if action.startswith('f'):
             print("\n❌ You folded! The Bot steals the pot.")
             print("Bot's hidden cards were:")
             print(self.render_cards(bot_hand_str))
-            return -10 # Lost your ante
+            return -10
             
         elif action.startswith('b'):
-            pot += 40 # 20 more chips from each player
+            pot += 40
             print("\n💰 You put 20 more chips into the pot!")
             
-            # Simple AI decision threshold using Treys strength metrics
             bot_cards = [Card.new(c) for c in bot_hand_str]
             board_cards = [Card.new(c) for c in current_board]
             bot_score = evaluator.evaluate(board_cards, bot_cards)
@@ -73,7 +79,7 @@ class VisualHoldemGame:
                 print("🏳️ Bot folds! Your bluff worked perfectly. You win the pot!")
                 print("Bot folded:")
                 print(self.render_cards(bot_hand_str))
-                return 10 # Won the bot's ante
+                return 10
 
         # --- The Showdown ---
         current_board.extend(turn + river)
@@ -88,7 +94,6 @@ class VisualHoldemGame:
         print(self.render_cards(current_board))
         print("-" * 45)
         
-        # Evaluate combinations via the internal Treys module
         h_hand = [Card.new(c) for c in human_hand_str]
         b_hand = [Card.new(c) for c in bot_hand_str]
         final_board = [Card.new(c) for c in current_board]
@@ -116,7 +121,7 @@ class VisualHoldemGame:
             return 0
 
     def start_tournament(self, total_rounds=5):
-        chips = 100 # Starting Bankroll
+        chips = 100
         print("\n" + "═" * 45)
         print(f"  STARTING POKER TOURNAMENT: {total_rounds} HANDS MATCH  ")
         print("═" * 45)
