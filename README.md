@@ -1,21 +1,36 @@
 # 4-Player Texas Hold'em Poker Bot (C++)
 
-![C++](https://img.shields.io/badge/Language-C%2B%2B-blue.svg) ![License](https://img.shields.io/badge/License-MIT-yellow.svg) ![Status](https://img.shields.io/badge/Status-Active-success.svg)
+![Language](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen.svg)
 
-A high-performance, probability-driven Texas Hold'em poker engine built in C++. This engine utilizes dynamic game states, multi-player seat rotations, and core game logic to simulate and calculate hand strength and decisions based on pot odds.
+A high-performance, probability-driven Texas Hold'em poker simulation engine built in modern C++. The project combines an interactive 4-player terminal application with an integrated Monte Carlo simulation engine and Expected Value (EV) decision-making logic for AI opponents.
+
+---
+
+## Key Features
+
+- **Monte Carlo AI Decision Engine:** Replaces static rule-based or random AI with a real-time equity evaluation system running Monte Carlo hand simulations.
+- **Expected Value (EV) Calculation:** AI opponents evaluate pot odds, effective stack sizes, and positional advantage to dynamically decide between `FOLD`, `CHECK`, `CALL`, and `RAISE`.
+- **Full Betting Round Engine:** Handles complete multi-player betting rounds across all streets: **Pre-Flop**, **Flop**, **Turn**, and **River**.
+- **Clean Architecture:** Zero heavy external dependencies—built purely with standard C++ headers and high-performance algorithms.
+
+---
 
 ## 🏛️ Core Architecture
 
-* **Game State Management (`PokerNode.h`):** Structures player states, chips, active turns, and hand evaluation logic cleanly encapsulated in header files.
-* **Probability & Decision Loop:** Dynamically evaluates game rules and player actions (`Fold`, `Check`, `Call`, `Raise`) during terminal-based execution.
-* **Pure C++ Backend:** Optimized for speed and low latency using standard C++ structures and headers without heavy external dependencies.
+- **Game State Management (`include/PokerNode.h`):** Structures player states, chip stacks, betting contributions, and visual hand representations cleanly in modern C++ headers.
+- **Monte Carlo Engine (`src/main.cpp`):** Evaluates equity by simulating probabilistic runouts against opponent ranges to compute optimal decision trees.
+- **Pure C++ Performance:** Optimized execution speed allowing hundreds of thousands of Monte Carlo iterations per decision in milliseconds.
+
+---
 
 ## 📂 Project Structure
 
 ```text
 poker-ai-engine/
 ├── include/
-│   └── PokerNode.h     # Core game state nodes and player structures
+│   └── PokerNode.h       # Core game state nodes and player structures
 ├── src/
-│   └── main.cpp        # Execution entry point and game loop
-└── README.md           # Project documentation
+│   └── main.cpp          # Main game loop, betting driver, and EV engine
+└── README.md             # Project documentation
