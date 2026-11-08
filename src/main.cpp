@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <random>
 #include <map>
-#include "PokerNode.h"
+#include "../include/PokerNode.h"
 
 class HoldemEngine {
 private:
